@@ -640,11 +640,13 @@ class SQLiteManager implements IDatabaseManager {
       updateStmt.free();
       this.saveToFile();
 
+      const subscriptionType = String(result[2]);
+      const userName = String(result[1]);
       return {
         isValid: true,
-        subscriptionType: result[2],
-        userName: result[1],
-        message: `Valid ${result[2]} subscription for ${result[1]}`,
+        subscriptionType,
+        userName,
+        message: `Valid ${subscriptionType} subscription for ${userName}`,
       };
     } catch (error) {
       console.error("❌ Subscription validation error:", error);
