@@ -622,7 +622,9 @@ class SQLiteManager implements IDatabaseManager {
         };
       }
 
-      if (result[4] && new Date(result[4]) < new Date()) {
+      const expiresRaw = result[4] as any;
+      const expiresAtDate = expiresRaw ? new Date(String(expiresRaw)) : null;
+      if (expiresAtDate && expiresAtDate < new Date()) {
         return {
           isValid: false,
           message: "Subscription has expired. Please renew your membership.",
