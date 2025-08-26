@@ -1,6 +1,8 @@
-import { RequestHandler } from "express";
+import type { RequestHandler } from "express";
 import { Analytics } from "../utils/logger";
 import { sqliteDb } from "../utils/sqlite-db";
+
+const dbType = process.env.POSTGRES_URL || process.env.DATABASE_URL ? "PostgreSQL" : "SQLite";
 
 export const getDatabaseHealth: RequestHandler = async (req, res) => {
   const startTime = Date.now();
@@ -12,28 +14,26 @@ export const getDatabaseHealth: RequestHandler = async (req, res) => {
       timestamp: new Date().toISOString(),
       responseTime: Date.now() - startTime,
       database: {
-        type: "SQLite",
+        type: dbType,
         connected: health.connected,
         totalSubscriptions: health.totalSubscriptions,
         totalBookings: health.totalBookings,
         error: health.error,
       },
       environment: {
-        SQLITE_DB_PATH: process.env.SQLITE_DB_PATH || "default",
         NODE_ENV: process.env.NODE_ENV || "unknown",
       },
     };
 
-    // Log critical database issues
     if (!health.connected) {
-      console.error("❌ SQLite health check failed:", {
+      console.error(`❌ ${dbType} health check failed:`, {
         error: health.error,
         timestamp: response.timestamp,
       });
 
       Analytics.trackError(
-        new Error(`SQLite health check failed: ${health.error}`),
-        "sqlite_health_check",
+        new Error(`${dbType} health check failed: ${health.error}`),
+        "db_health_check",
         {
           error: health.error,
           ip: req.ip,
@@ -41,18 +41,19 @@ export const getDatabaseHealth: RequestHandler = async (req, res) => {
       );
     }
 
-    Analytics.trackPerformance("sqlite_health_check", Date.now() - startTime, {
+    Analytics.trackPerformance("db_health_check", Date.now() - startTime, {
       connected: health.connected,
       totalSubscriptions: health.totalSubscriptions,
       totalBookings: health.totalBookings,
+      dbType,
     });
 
     const httpStatus = health.connected ? 200 : 503;
     res.status(httpStatus).json(response);
   } catch (error) {
-    console.error("❌ SQLite health check endpoint error:", error);
+    console.error(`❌ ${dbType} health check endpoint error:`, error);
 
-    Analytics.trackError(error as Error, "sqlite_health_check_endpoint", {
+    Analytics.trackError(error as Error, "db_health_check_endpoint", {
       ip: req.ip,
       context: "health_check_route",
     });
@@ -69,28 +70,26 @@ export const getDatabaseHealth: RequestHandler = async (req, res) => {
   }
 };
 
-export const getDatabaseConnectionInfo: RequestHandler = async (req, res) => {
+export const getDatabaseConnectionInfo: RequestHandler = async (_req, res) => {
   try {
     const health = await sqliteDb.healthCheck();
 
     res.json({
       timestamp: new Date().toISOString(),
       connection: {
-        type: "SQLite",
-        dbPath: process.env.SQLITE_DB_PATH || "server/db/hybe.db",
+        type: dbType,
         connected: health.connected,
         totalSubscriptions: health.totalSubscriptions,
         totalBookings: health.totalBookings,
       },
       environment: {
         NODE_ENV: process.env.NODE_ENV || "unknown",
-        SQLITE_DB_PATH: process.env.SQLITE_DB_PATH || "default",
       },
     });
   } catch (error) {
-    console.error("SQLite connection info error:", error);
+    console.error(`${dbType} connection info error:`, error);
     res.status(500).json({
-      error: "Failed to get SQLite connection info",
+      error: "Failed to get database connection info",
       timestamp: new Date().toISOString(),
     });
   }
@@ -100,7 +99,7 @@ export const testDatabaseConnection: RequestHandler = async (req, res) => {
   const startTime = Date.now();
 
   try {
-    console.info("🔄 Testing SQLite database connection...");
+    console.info(`🔄 Testing ${dbType} database connection...`);
 
     const health = await sqliteDb.healthCheck();
 
@@ -113,20 +112,20 @@ export const testDatabaseConnection: RequestHandler = async (req, res) => {
       });
     }
 
-    console.info("✅ SQLite database connection test successful");
+    console.info(`✅ ${dbType} database connection test successful`);
 
     res.json({
       success: true,
-      type: "SQLite",
+      type: dbType,
       responseTime: Date.now() - startTime,
       timestamp: new Date().toISOString(),
       totalSubscriptions: health.totalSubscriptions,
       totalBookings: health.totalBookings,
     });
   } catch (error) {
-    console.error("❌ SQLite connection test failed:", error);
+    console.error(`❌ ${dbType} connection test failed:`, error);
 
-    Analytics.trackError(error as Error, "sqlite_connection_test", {
+    Analytics.trackError(error as Error, "db_connection_test", {
       ip: req.ip,
     });
 
@@ -139,14 +138,14 @@ export const testDatabaseConnection: RequestHandler = async (req, res) => {
   }
 };
 
-export const getDatabaseSchema: RequestHandler = async (req, res) => {
+export const getDatabaseSchema: RequestHandler = async (_req, res) => {
   try {
     const health = await sqliteDb.healthCheck();
 
     res.json({
       timestamp: new Date().toISOString(),
       schema: {
-        type: "SQLite",
+        type: dbType,
         connected: health.connected,
         tables: ["subscription_ids", "booking_requests"],
         totalSubscriptions: health.totalSubscriptions,
@@ -155,9 +154,9 @@ export const getDatabaseSchema: RequestHandler = async (req, res) => {
       },
     });
   } catch (error) {
-    console.error("SQLite schema check error:", error);
+    console.error(`${dbType} schema check error:`, error);
     res.status(500).json({
-      error: "Failed to check SQLite schema",
+      error: "Failed to check database schema",
       timestamp: new Date().toISOString(),
     });
   }
@@ -167,16 +166,16 @@ export const initializeDatabaseSchema: RequestHandler = async (req, res) => {
   const startTime = Date.now();
 
   try {
-    console.info("🔄 Initializing SQLite database schema...");
+    console.info(`🔄 Initializing ${dbType} database schema...`);
 
     const result = await sqliteDb.initialize();
 
     if (result) {
-      console.info("✅ SQLite database schema initialization successful");
+      console.info(`✅ ${dbType} database schema initialization successful`);
       const health = await sqliteDb.healthCheck();
       res.json({
         success: true,
-        message: "SQLite database schema initialized successfully",
+        message: `${dbType} database schema initialized successfully`,
         responseTime: Date.now() - startTime,
         timestamp: new Date().toISOString(),
         totalSubscriptions: health.totalSubscriptions,
@@ -185,15 +184,15 @@ export const initializeDatabaseSchema: RequestHandler = async (req, res) => {
     } else {
       res.status(500).json({
         success: false,
-        message: "SQLite database schema initialization failed",
+        message: `${dbType} database schema initialization failed`,
         responseTime: Date.now() - startTime,
         timestamp: new Date().toISOString(),
       });
     }
   } catch (error) {
-    console.error("❌ SQLite schema initialization failed:", error);
+    console.error(`❌ ${dbType} schema initialization failed:`, error);
 
-    Analytics.trackError(error as Error, "sqlite_schema_init", {
+    Analytics.trackError(error as Error, "db_schema_init", {
       ip: req.ip,
     });
 
