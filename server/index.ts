@@ -26,7 +26,10 @@ import {
   errorTrackingHealthCheck,
 } from "./middleware/errorTracking";
 
-const dbType = process.env.POSTGRES_URL || process.env.DATABASE_URL ? "PostgreSQL" : "SQLite";
+const dbType =
+  process.env.POSTGRES_URL || process.env.DATABASE_URL
+    ? "PostgreSQL"
+    : "SQLite";
 
 const getDatabaseHealth: any = async (_req: any, res: any) => {
   try {

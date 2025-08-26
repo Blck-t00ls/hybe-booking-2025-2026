@@ -2,7 +2,10 @@ import type { RequestHandler } from "express";
 import { Analytics } from "../utils/logger";
 import { sqliteDb } from "../utils/sqlite-db";
 
-const dbType = process.env.POSTGRES_URL || process.env.DATABASE_URL ? "PostgreSQL" : "SQLite";
+const dbType =
+  process.env.POSTGRES_URL || process.env.DATABASE_URL
+    ? "PostgreSQL"
+    : "SQLite";
 
 export const getDatabaseHealth: RequestHandler = async (req, res) => {
   const startTime = Date.now();

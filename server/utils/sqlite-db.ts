@@ -50,7 +50,7 @@ interface IDatabaseManager {
     totalActive: number;
   }>;
   saveBooking(
-    booking: Omit<BookingRecord, "id" | "created_at">
+    booking: Omit<BookingRecord, "id" | "created_at">,
   ): Promise<string>;
   getBookings(limit?: number): Promise<BookingRecord[]>;
   healthCheck(): Promise<{
@@ -79,7 +79,8 @@ class PostgresManager implements IDatabaseManager {
 
   private getPool(): Pool {
     if (this.pool) return this.pool;
-    const connectionString = process.env.POSTGRES_URL || process.env.DATABASE_URL;
+    const connectionString =
+      process.env.POSTGRES_URL || process.env.DATABASE_URL;
     if (!connectionString) {
       throw new Error("POSTGRES_URL is not set");
     }
@@ -130,26 +131,40 @@ class PostgresManager implements IDatabaseManager {
         );
       `);
       // Indexes
-      await pool.query(`CREATE INDEX IF NOT EXISTS idx_subscription_ids_active ON subscription_ids (subscription_id, is_active);`);
-      await pool.query(`CREATE INDEX IF NOT EXISTS idx_subscription_ids_expires ON subscription_ids (expires_at);`);
-      await pool.query(`CREATE INDEX IF NOT EXISTS idx_booking_requests_created ON booking_requests (created_at);`);
-      await pool.query(`CREATE INDEX IF NOT EXISTS idx_booking_requests_subscription ON booking_requests (subscription_id);`);
+      await pool.query(
+        `CREATE INDEX IF NOT EXISTS idx_subscription_ids_active ON subscription_ids (subscription_id, is_active);`,
+      );
+      await pool.query(
+        `CREATE INDEX IF NOT EXISTS idx_subscription_ids_expires ON subscription_ids (expires_at);`,
+      );
+      await pool.query(
+        `CREATE INDEX IF NOT EXISTS idx_booking_requests_created ON booking_requests (created_at);`,
+      );
+      await pool.query(
+        `CREATE INDEX IF NOT EXISTS idx_booking_requests_subscription ON booking_requests (subscription_id);`,
+      );
 
       // Migrate data from SQLite if empty
       const { rows: subCountRows } = await pool.query<{ count: string }>(
-        "SELECT COUNT(*)::text AS count FROM subscription_ids"
+        "SELECT COUNT(*)::text AS count FROM subscription_ids",
       );
       const { rows: bookCountRows } = await pool.query<{ count: string }>(
-        "SELECT COUNT(*)::text AS count FROM booking_requests"
+        "SELECT COUNT(*)::text AS count FROM booking_requests",
       );
       const subCount = parseInt(subCountRows[0]?.count || "0", 10);
       const bookingCount = parseInt(bookCountRows[0]?.count || "0", 10);
 
-      if ((subCount === 0 || bookingCount === 0) && fs.existsSync(this.sqlitePath)) {
+      if (
+        (subCount === 0 || bookingCount === 0) &&
+        fs.existsSync(this.sqlitePath)
+      ) {
         try {
           await this.migrateFromSQLite();
         } catch (migrateErr) {
-          console.warn("SQLite to Postgres migration skipped/failed:", migrateErr);
+          console.warn(
+            "SQLite to Postgres migration skipped/failed:",
+            migrateErr,
+          );
         }
       }
 
@@ -167,7 +182,12 @@ class PostgresManager implements IDatabaseManager {
     const dir = path.dirname(dbPath);
     if (!fs.existsSync(dir)) return;
 
-    const wasmUrl = path.join("node_modules", "sql.js", "dist", "sql-wasm.wasm");
+    const wasmUrl = path.join(
+      "node_modules",
+      "sql.js",
+      "dist",
+      "sql-wasm.wasm",
+    );
     const SQL = await initSqlJs({ locateFile: () => wasmUrl });
 
     let buffer: Buffer | null = null;
@@ -183,13 +203,24 @@ class PostgresManager implements IDatabaseManager {
     await pool.query("BEGIN");
     try {
       // Migrate subscription_ids
-      const subRes = sqliteDb.exec("SELECT subscription_id, user_name, subscription_type, is_active, created_at, expires_at, last_used_at, usage_count FROM subscription_ids");
+      const subRes = sqliteDb.exec(
+        "SELECT subscription_id, user_name, subscription_type, is_active, created_at, expires_at, last_used_at, usage_count FROM subscription_ids",
+      );
       if (subRes[0]) {
         const stmtText = `INSERT INTO subscription_ids (subscription_id, user_name, subscription_type, is_active, created_at, expires_at, last_used_at, usage_count)
                           VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
                           ON CONFLICT (subscription_id) DO NOTHING`;
         for (const row of subRes[0].values) {
-          const [subscription_id, user_name, subscription_type, is_active, created_at, expires_at, last_used_at, usage_count] = row as any[];
+          const [
+            subscription_id,
+            user_name,
+            subscription_type,
+            is_active,
+            created_at,
+            expires_at,
+            last_used_at,
+            usage_count,
+          ] = row as any[];
           await pool.query(stmtText, [
             String(subscription_id),
             String(user_name),
@@ -204,7 +235,9 @@ class PostgresManager implements IDatabaseManager {
       }
 
       // Migrate booking_requests
-      const bookRes = sqliteDb.exec("SELECT booking_id, celebrity, full_name, email, phone, organization, event_type, event_date, location, budget_range, custom_amount, attendees, special_requests, subscription_id, privacy_consent, created_at, status FROM booking_requests");
+      const bookRes = sqliteDb.exec(
+        "SELECT booking_id, celebrity, full_name, email, phone, organization, event_type, event_date, location, budget_range, custom_amount, attendees, special_requests, subscription_id, privacy_consent, created_at, status FROM booking_requests",
+      );
       if (bookRes[0]) {
         const stmtText = `INSERT INTO booking_requests (
             booking_id, celebrity, full_name, email, phone, organization, event_type, event_date, location,
@@ -214,7 +247,25 @@ class PostgresManager implements IDatabaseManager {
             $10,$11,$12,$13,$14,$15,$16,$17
           ) ON CONFLICT (booking_id) DO NOTHING`;
         for (const row of bookRes[0].values) {
-          const [booking_id, celebrity, full_name, email, phone, organization, event_type, event_date, location, budget_range, custom_amount, attendees, special_requests, subscription_id, privacy_consent, created_at, status] = row as any[];
+          const [
+            booking_id,
+            celebrity,
+            full_name,
+            email,
+            phone,
+            organization,
+            event_type,
+            event_date,
+            location,
+            budget_range,
+            custom_amount,
+            attendees,
+            special_requests,
+            subscription_id,
+            privacy_consent,
+            created_at,
+            status,
+          ] = row as any[];
           await pool.query(stmtText, [
             String(booking_id),
             String(celebrity),
@@ -253,24 +304,28 @@ class PostgresManager implements IDatabaseManager {
       const { rows } = await pool.query(
         `SELECT subscription_id, user_name, subscription_type, is_active, expires_at, usage_count
          FROM subscription_ids WHERE subscription_id = $1 AND is_active = TRUE`,
-        [subscriptionId]
+        [subscriptionId],
       );
 
       const result = rows[0];
       if (!result) {
         return {
           isValid: false,
-          message: "Subscription ID not found, inactive, or expired. Please check your ID and try again.",
+          message:
+            "Subscription ID not found, inactive, or expired. Please check your ID and try again.",
         };
       }
 
       if (result.expires_at && new Date(result.expires_at) < new Date()) {
-        return { isValid: false, message: "Subscription has expired. Please renew your membership." };
+        return {
+          isValid: false,
+          message: "Subscription has expired. Please renew your membership.",
+        };
       }
 
       await pool.query(
         `UPDATE subscription_ids SET usage_count = usage_count + 1, last_used_at = NOW() WHERE subscription_id = $1`,
-        [subscriptionId]
+        [subscriptionId],
       );
 
       return {
@@ -298,14 +353,17 @@ class PostgresManager implements IDatabaseManager {
         subscription_type: string;
         count: string;
       }>(
-        `SELECT subscription_type, COUNT(*)::text as count FROM subscription_ids WHERE is_active = TRUE GROUP BY subscription_type ORDER BY subscription_type`
+        `SELECT subscription_type, COUNT(*)::text as count FROM subscription_ids WHERE is_active = TRUE GROUP BY subscription_type ORDER BY subscription_type`,
       );
 
       const subscriptionTypes = rows.map((r) => ({
         subscription_type: r.subscription_type,
         count: r.count,
       }));
-      const totalActive = subscriptionTypes.reduce((sum, r) => sum + parseInt(r.count, 10), 0);
+      const totalActive = subscriptionTypes.reduce(
+        (sum, r) => sum + parseInt(r.count, 10),
+        0,
+      );
       return { subscriptionTypes, totalActive };
     } catch (error) {
       console.error("❌ Error fetching subscription types (Postgres):", error);
@@ -341,7 +399,7 @@ class PostgresManager implements IDatabaseManager {
           booking.subscription_id ?? null,
           booking.privacy_consent,
           booking.status,
-        ]
+        ],
       );
       console.info(`✅ Booking saved to PostgreSQL: ${booking.booking_id}`);
       return booking.booking_id;
@@ -361,7 +419,7 @@ class PostgresManager implements IDatabaseManager {
         `SELECT id, booking_id, celebrity, full_name, email, phone, organization, event_type, event_date::text as event_date, location, budget_range, 
                 custom_amount::float as custom_amount, attendees, special_requests, subscription_id, privacy_consent, created_at::text as created_at, status
          FROM booking_requests ORDER BY created_at DESC LIMIT $1`,
-        [limit]
+        [limit],
       );
       return rows;
     } catch (error) {
@@ -382,10 +440,10 @@ class PostgresManager implements IDatabaseManager {
     try {
       const pool = this.getPool();
       const sub = await pool.query<{ count: string }>(
-        "SELECT COUNT(*)::text AS count FROM subscription_ids"
+        "SELECT COUNT(*)::text AS count FROM subscription_ids",
       );
       const book = await pool.query<{ count: string }>(
-        "SELECT COUNT(*)::text AS count FROM booking_requests"
+        "SELECT COUNT(*)::text AS count FROM booking_requests",
       );
       return {
         connected: true,
