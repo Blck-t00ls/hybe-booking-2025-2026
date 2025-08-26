@@ -1,4 +1,3 @@
-import "dotenv/config";
 import express from "express";
 import cors from "cors";
 import { handleDemo } from "./routes/demo";
@@ -13,27 +12,6 @@ import {
   getAnalyticsDashboard,
   getRealTimeMetrics,
 } from "./routes/monitoring";
-// Database health endpoints (now using SQLite)
-const getSQLiteDatabaseHealth: any = async (req: any, res: any) => {
-  try {
-    const health = await sqliteDb.healthCheck();
-    res.json({
-      database: "SQLite",
-      status: health.connected ? "connected" : "disconnected",
-      totalSubscriptions: health.totalSubscriptions,
-      totalBookings: health.totalBookings,
-      error: health.error,
-      timestamp: new Date().toISOString(),
-    });
-  } catch (error) {
-    res.status(500).json({
-      database: "SQLite",
-      status: "error",
-      error: (error as Error).message,
-      timestamp: new Date().toISOString(),
-    });
-  }
-};
 import { initializeCache } from "./utils/cache";
 import { sqliteDb } from "./utils/sqlite-db";
 import { requestLogger, Analytics } from "./utils/logger";
@@ -48,10 +26,33 @@ import {
   errorTrackingHealthCheck,
 } from "./middleware/errorTracking";
 
+const dbType = process.env.POSTGRES_URL || process.env.DATABASE_URL ? "PostgreSQL" : "SQLite";
+
+const getDatabaseHealth: any = async (_req: any, res: any) => {
+  try {
+    const health = await sqliteDb.healthCheck();
+    res.json({
+      database: dbType,
+      status: health.connected ? "connected" : "disconnected",
+      totalSubscriptions: health.totalSubscriptions,
+      totalBookings: health.totalBookings,
+      error: health.error,
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    res.status(500).json({
+      database: dbType,
+      status: "error",
+      error: (error as Error).message,
+      timestamp: new Date().toISOString(),
+    });
+  }
+};
+
 export async function createServer() {
   const app = express();
 
-  // Initialize SQLite cache
+  // Initialize cache (independent of primary DB)
   try {
     await initializeCache();
     console.info("✓ SQLite cache initialized successfully");
@@ -62,16 +63,16 @@ export async function createServer() {
     );
   }
 
-  // Initialize SQLite database
+  // Initialize primary database
   try {
     const initialized = await sqliteDb.initialize();
     if (initialized) {
-      console.info("✓ SQLite database initialized successfully");
+      console.info(`✓ ${dbType} database initialized successfully`);
     } else {
-      console.warn("⚠ SQLite database initialization failed");
+      console.warn(`⚠ ${dbType} database initialization failed`);
     }
   } catch (error) {
-    console.warn("⚠ SQLite database initialization error:", error);
+    console.warn(`⚠ ${dbType} database initialization error:`, error);
   }
 
   // Trust proxy for accurate IP addresses
@@ -97,7 +98,7 @@ export async function createServer() {
   // Health check and monitoring endpoints
   app.get("/api/health/error-tracking", errorTrackingHealthCheck);
   app.get("/api/health/system", getSystemHealth);
-  app.get("/api/health/database", getSQLiteDatabaseHealth);
+  app.get("/api/health/database", getDatabaseHealth);
   app.get("/api/monitoring/dashboard", getAnalyticsDashboard);
   app.get("/api/monitoring/metrics", getRealTimeMetrics);
 
