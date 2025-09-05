@@ -30,7 +30,6 @@ export interface BookingResponse {
 
 export const handleBookingSubmission: RequestHandler = async (req, res) => {
   const startTime = Date.now();
-  let netlifySubmissionSuccess = false;
 
   try {
     const bookingData: BookingRequest = req.body;
@@ -116,61 +115,6 @@ export const handleBookingSubmission: RequestHandler = async (req, res) => {
       // Continue with Netlify submission even if SQLite fails
     }
 
-    // Prepare data for Netlify form submission
-    const netlifyFormData = {
-      "form-name": "hybe-booking",
-      "booking-id": bookingId,
-      "fan-preference": bookingData.fanPreference || "",
-      celebrity: bookingData.selectedCelebrity,
-      "event-type": bookingData.selectedEventType,
-      budget: bookingData.budget,
-      "custom-amount": bookingData.customAmount || "",
-      attendees: bookingData.attendees,
-      "preferred-date": bookingData.preferredDate,
-      location: bookingData.location,
-      "special-requests": bookingData.specialRequests,
-      "subscription-id": bookingData.subscriptionId || "",
-      "contact-name": bookingData.contactInfo.name,
-      "contact-email": bookingData.contactInfo.email,
-      "contact-phone": bookingData.contactInfo.phone,
-      "contact-organization": bookingData.contactInfo.organization || "",
-      "privacy-consent": String(bookingData.privacyConsent),
-      "submission-time": new Date().toISOString(),
-      "user-agent": req.headers["user-agent"] || "",
-      "ip-address": req.ip || "",
-    };
-
-    // Submit to Netlify forms (this would work when deployed to Netlify)
-    const netlifyStartTime = Date.now();
-    try {
-      if (process.env.NODE_ENV === "production") {
-        const netlifyResponse = await fetch("/", {
-          method: "POST",
-          headers: { "Content-Type": "application/x-www-form-urlencoded" },
-          body: new URLSearchParams(netlifyFormData).toString(),
-        });
-
-        netlifySubmissionSuccess = netlifyResponse.ok;
-
-        if (!netlifyResponse.ok) {
-          console.warn(
-            "Netlify form submission failed, continuing with local processing",
-          );
-        }
-      }
-    } catch (netlifyError) {
-      console.warn("Netlify form submission error:", netlifyError);
-      // Continue with local processing even if Netlify submission fails
-    }
-
-    Analytics.trackPerformance(
-      "netlify_form_submission",
-      Date.now() - netlifyStartTime,
-      {
-        success: netlifySubmissionSuccess,
-        bookingId,
-      },
-    );
 
     // Track successful booking analytics
     Analytics.trackBookingSubmission({
@@ -189,7 +133,6 @@ export const handleBookingSubmission: RequestHandler = async (req, res) => {
       {
         bookingId,
         hasSubscription: !!bookingData.subscriptionId,
-        netlifySuccess: netlifySubmissionSuccess,
       },
     );
 
@@ -206,7 +149,6 @@ export const handleBookingSubmission: RequestHandler = async (req, res) => {
       ip: req.ip,
       hasSubscription: !!req.body?.subscriptionId,
       duration: Date.now() - startTime,
-      netlifySuccess: netlifySubmissionSuccess,
     });
 
     Analytics.trackBookingSubmission({
